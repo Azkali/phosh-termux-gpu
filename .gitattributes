@@ -1,0 +1,8 @@
+# These run on Linux/Termux — force LF so they never get CRLF'd.
+*.sh    text eol=lf
+*.py    text eol=lf
+*.c     text eol=lf
+*.ini   text eol=lf
+*.md    text eol=lf
+LICENSE text eol=lf
+*.png   binary

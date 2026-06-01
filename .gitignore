@@ -1,0 +1,9 @@
+# build outputs / large trees never belong in the repo (they're built on-device)
+*.so
+*.o
+*.log
+mesa-git/
+wlroots/
+build/
+builddir/
+__pycache__/
