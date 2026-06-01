@@ -44,7 +44,7 @@ Run everything **inside the Termux app** (not over adb):
 
 ```bash
 pkg install -y git
-git clone https://github.com/<you>/phosh-termux-gpu.git
+git clone https://github.com/Azkali/phosh-termux-gpu.git
 cd phosh-termux-gpu
 bash install.sh
 ```
