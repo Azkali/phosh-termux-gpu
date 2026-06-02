@@ -3,7 +3,7 @@
 # presenting to Termux:X11 over XShm.  Run from inside the Fedora container.
 # Env knobs:
 #   PHOSH_GPU_DEBUG=1   LD_PRELOAD the SIGSEGV/SIGABRT backtrace handler + full speed
-#   PHOSH_GPU_TU_DEBUG  override TU_DEBUG (default: flushall,syncdraw to tame the race)
+#   PHOSH_GPU_TU_DEBUG  override TU_DEBUG (default is chosen per GPU generation below)
 set -u
 export XDG_RUNTIME_DIR=/tmp/runtime-root
 mkdir -p "$XDG_RUNTIME_DIR"; chmod 700 "$XDG_RUNTIME_DIR"
@@ -21,8 +21,20 @@ export GSK_RENDERER=cairo
 export LD_LIBRARY_PATH=/root/wlroots/build
 export WLR_RENDERER=vulkan
 export VK_ICD_FILENAMES=/opt/mesa-kgsl-git/share/vulkan/icd.d/freedreno_icd.aarch64.json
-# Serialize GPU submission to tame the rare post-unlock race (set empty for max speed).
-export TU_DEBUG="${PHOSH_GPU_TU_DEBUG-flushall,syncdraw}"
+
+# Per-GPU TU_DEBUG default. The brand-new Adreno 8xx (e.g. 830) Turnip has a rare
+# post-unlock race that serializing GPU submission (flushall,syncdraw) tames; the
+# mature 7xx and earlier (e.g. 750/740) don't need it and run faster without it.
+# proot binds the host /sys, so we can read the model straight from KGSL.
+# Override anytime with PHOSH_GPU_TU_DEBUG=... (empty string = full speed).
+gpu_model="$(cat /sys/class/kgsl/kgsl-3d0/gpu_model 2>/dev/null)"   # e.g. "Adreno750v2"
+adreno_gen="$(printf '%s' "$gpu_model" | grep -oE '[0-9]' | head -1)"  # leading digit: 8, 7, ...
+case "$adreno_gen" in
+  3|4|5|6|7) tu_default="" ;;             # a7xx and older: mature, full speed
+  *)         tu_default="flushall,syncdraw" ;;  # a8xx+ OR undetected: serialize (the safe default)
+esac
+export TU_DEBUG="${PHOSH_GPU_TU_DEBUG-$tu_default}"
+echo "[guest] GPU: ${gpu_model:-unknown} -> TU_DEBUG='${TU_DEBUG}'"
 
 if [ "${PHOSH_GPU_DEBUG:-0}" = "1" ]; then
   export LD_PRELOAD=/root/libsegcatch.so      # backtrace on crash

@@ -2,7 +2,7 @@
 
 **Hardware-accelerated [Phosh](https://gitlab.gnome.org/World/Phosh/phosh) (the mobile GNOME shell) on a stock, unrooted Qualcomm Android phone**, running in [Termux](https://termux.dev) + a Fedora `proot-distro` container, GPU-composited on the **Adreno** GPU via a patched wlroots and a KGSL **Turnip** (Vulkan) driver.
 
-Developed and verified on a **Samsung Galaxy S25 (Snapdragon 8 Elite / Adreno 830, Android 16, unrooted)**. It should adapt to other recent Snapdragon devices (a7xx/a8xx Adreno) with little or no change.
+Developed on a **Samsung Galaxy S25 (Snapdragon 8 Elite / Adreno 830)** and also verified on a **Galaxy Z Flip 6 (Snapdragon 8 Gen 3 / Adreno 750)** — the Flip 6 needed **zero source changes**, only its panel resolution in `phoc.ini`. It should adapt to other recent Snapdragon devices (a7xx/a8xx Adreno) the same way. See [Tested devices](#tested-devices).
 
 > **The short version of why this is interesting:** wlroots' X11 backend normally needs DRI3/DMA-BUF for any GPU renderer, which the software X server (Termux:X11) doesn't provide, and the Adreno GPU has no DRM render node (it's KGSL-only). This project bypasses **both** walls: phoc composites on the GPU with Vulkan/Turnip and presents the finished frame to Termux:X11 over the existing **software (XShm) path** — no DRI3, no DMA-BUF.
 
@@ -22,7 +22,18 @@ Developed and verified on a **Samsung Galaxy S25 (Snapdragon 8 Elite / Adreno 83
 - ✅ The GPU compositor works and is stable enough for daily poking around.
 - ⚠️ There is a **rare** (~1 in 4 cold starts) intermittent crash right after unlock. The `*-segv` launcher captures a backtrace if it bites you. The software fallback never has this.
 - ⚠️ Apps render their **own** contents in software (cairo) — there is no in-app GPU acceleration, because the compositor can't share DMA-BUFs here. The *compositing* (blending, the whole screen) is on the GPU.
-- ⚠️ Turnip on the Adreno 830 is brand-new in Mesa; we build Mesa **main** because that's where the a8xx support lives.
+- ⚠️ We build Mesa **main** because that's where the newest Adreno support lives (the Adreno 830 in particular is very new). Mature GPUs like the Adreno 750 work on main with no driver changes at all.
+
+---
+
+## Tested devices
+
+| Phone | SoC | GPU | Source changes needed | Notes |
+|-------|-----|-----|-----------------------|-------|
+| Galaxy S25 (SM-S931B) | Snapdragon 8 Elite (SM8750) | Adreno 830 | wlroots patches + the a830 was brand-new (Mesa **main** has native a830/UBWC-5.0, so no extra device-id hacks on main) | The original target. |
+| Galaxy Z Flip 6 (SM-F741B) | Snapdragon 8 Gen 3 (SM8650) | Adreno 750 | **None** beyond `phoc.ini` resolution | a750 is mature in Mesa; `Turnip Adreno (TM) 750` enumerates out of the box. |
+
+The 16 wlroots patches are **device-independent** (they decouple the renderer from the X11/shm present path, nothing GPU-specific). Porting to another recent Snapdragon is therefore just: set `phoc.ini` `mode` to your panel, and make sure `/dev/kgsl-3d0` is world-accessible. The launcher reads your Adreno model from KGSL and **picks the right `TU_DEBUG` default automatically** (see [Per-device config](#per-device-config)).
 
 ---
 
@@ -107,6 +118,31 @@ The two key pieces of original work:
 2. **KGSL Turnip from Mesa main** (`fedora/3-build-turnip.sh`): Mesa main already has native Adreno 830 + UBWC 5.0 support; we build it with `-Dfreedreno-kmds=kgsl` so it talks to `/dev/kgsl-3d0` (the only GPU interface exposed to app domains), plus a one-line patch so `vulkaninfo` doesn't trip over `KHR_display`.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full story (and the dead-ends).
+
+---
+
+## Per-device config
+
+Two things are device-specific. The first is automatic; the second is one line.
+
+**1. `TU_DEBUG` (GPU submission) — automatic.** The brand-new Adreno **8xx** Turnip has a rare post-unlock race that serializing GPU submission (`flushall,syncdraw`) tames. The mature **7xx and earlier** don't need it and run faster without it. `launch-gpu.sh` reads `/sys/class/kgsl/kgsl-3d0/gpu_model` and picks the default for you:
+
+| GPU | Auto `TU_DEBUG` | Why |
+|-----|-----------------|-----|
+| Adreno 8xx (e.g. 830) | `flushall,syncdraw` | new driver, serialize to avoid the race |
+| Adreno 7xx & older (e.g. 750, 740) | *(empty — full speed)* | mature; verified stable on the Z Flip 6 (a750) over many cold starts |
+
+Override it explicitly if you want: `PHOSH_GPU_TU_DEBUG="" bash start.sh` (full speed) or `PHOSH_GPU_TU_DEBUG=flushall,syncdraw bash start.sh` (force serialized).
+
+**2. Panel resolution — set it once.** Edit `fedora/phoc.ini` `mode` to your panel, and set the same value as Termux:X11's *Custom resolution*:
+
+```ini
+[output:X11-1]
+mode = 1080x2640     # Galaxy Z Flip 6 main display; S25 = 1080x2336
+scale = 2
+```
+
+(Re-run phase 5 — `PHASE_ONLY=5 bash install.sh` — or just edit `/root/phoc.ini` inside the container.)
 
 ---
 

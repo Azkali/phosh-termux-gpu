@@ -44,6 +44,6 @@ Mesa **main** already has native Adreno 830 (`chip_id 0x44050001`) and UBWC 5.0 
 
 ## Known rough edges
 
-- **Rare post-unlock crash** (~1 in 4 cold starts). Full-speed it's a race; `gdb` serialises execution and hides it (a Heisenbug). `TU_DEBUG=flushall,syncdraw` (the default in `launch-gpu.sh`) serialises GPU submission and makes it much rarer. The `--debug` launcher LD_PRELOADs `libsegcatch.so` to print a backtrace if it does bite.
+- **Rare post-unlock crash on the Adreno 830 (~1 in 4 cold starts)** — a full-speed race in the brand-new a8xx Turnip; `gdb` serialises execution and hides it (a Heisenbug). `launch-gpu.sh` auto-sets `TU_DEBUG=flushall,syncdraw` *for a8xx GPUs* (read from `/sys/class/kgsl/kgsl-3d0/gpu_model`) to serialise GPU submission and make it much rarer. **The mature Adreno 750 doesn't show the race** — verified stable over many cold starts with no `TU_DEBUG` — so the launcher runs 7xx/older at full speed. The `--debug` launcher LD_PRELOADs `libsegcatch.so` to print a backtrace if it ever bites.
 - **Apps render in software** (`GSK_RENDERER=cairo`). With no DMA-BUF the compositor can't hand GTK4 a GPU surface, so GTK4's default GPU path crashes the app; cairo avoids that. The compositing is still GPU.
 - **Termux:X11 staleness** — after many phoc restarts the X server shows black even for known-good software phosh; `start.sh` restarts it.
