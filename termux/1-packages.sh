@@ -5,8 +5,9 @@ DISTRO="${DISTRO:-fedora}"
 
 echo "[*] Termux packages"
 pkg update -y
+pkg install -y x11-repo
 pkg install -y \
-  proot-distro git x11-repo termux-x11-nightly virglrenderer-android \
+  proot-distro git termux-x11-nightly virglrenderer-android \
   mesa-vulkan-icd-freedreno vulkan-tools vulkan-loader-generic \
   pulseaudio termux-am which
 
